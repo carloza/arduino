@@ -27,9 +27,11 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(32, 31, 30);
 
 #define MAX_PONG_LIFES 12
 #define PONG_LIFES 5
+#define MAX_SNAKE_LENGHT 30
+#define START_SNAKE_LENGHT 3
 
-#define JUGADOR1 A14 //potenciometro 1
-#define JUGADOR2 A15 //potenciometro 2
+#define POTEN1 A14 //potenciometro 1
+#define POTEN2 A15 //potenciometro 2
 
 static const unsigned char img [] PROGMEM = {
   // 'screen-img, 84x48px
@@ -83,8 +85,8 @@ void mostrarLogos(){
 void setup()   {
   Serial.begin(9600);
 
-  pinMode(JUGADOR1, INPUT);
-  pinMode(JUGADOR2, INPUT);
+  pinMode(POTEN1, INPUT);
+  pinMode(POTEN2, INPUT);
   display.begin();
   // init done
 
@@ -95,112 +97,23 @@ void setup()   {
 
 
   menu(100);
-
-
-  /*
-    // draw many lines
-    testdrawline();
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    // draw rectangles
-    testdrawrect();
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    // draw multiple rectangles
-    testfillrect();
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    // draw mulitple circles
-    testdrawcircle();
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    // draw a circle, 10 pixel radius
-    display.fillCircle(display.width()/2, display.height()/2, 10, BLACK);
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    testdrawroundrect();
-    delay(2000);
-    display.clearDisplay();
-
-    testfillroundrect();
-    delay(2000);
-    display.clearDisplay();
-
-    testdrawtriangle();
-    delay(2000);
-    display.clearDisplay();
-
-    testfilltriangle();
-    delay(2000);
-    display.clearDisplay();
-
-    // draw the first ~12 characters in the font
-    testdrawchar();
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-
-    // text display tests
-    display.setTextSize(1);
-    display.setTextColor(BLACK);
-    display.setCursor(0,0);
-    display.println("Hello, world!");
-    display.setTextColor(WHITE, BLACK); // 'inverted' text
-    display.println(3.141592);
-    display.setTextSize(2);
-    display.setTextColor(BLACK);
-    display.print("0x"); display.println(0xDEADBEEF, HEX);
-    display.display();
-    delay(2000);
-
-    // rotation example
-    display.clearDisplay();
-    display.setRotation(1);  // rotate 90 degrees counter clockwise, can also use values of 2 and 3 to go further.
-    display.setTextSize(1);
-    display.setTextColor(BLACK);
-    display.setCursor(0,0);
-    display.println("Rotation");
-    display.setTextSize(2);
-    display.println("Example!");
-    display.display();
-    delay(2000);
-
-    // revert back to no rotation
-    display.setRotation(0);
-
-    // miniature bitmap display
-    display.clearDisplay();
-    display.drawBitmap(30, 16,  logo16_glcd_bmp, 16, 16, 1);
-    display.display();
-
-    // invert the display
-    display.invertDisplay(true);
-    delay(1000);
-    display.invertDisplay(false);
-    delay(1000);
-
-    // draw a bitmap icon and 'animate' movement
-    testdrawbitmap(logo16_glcd_bmp, LOGO16_GLCD_WIDTH, LOGO16_GLCD_HEIGHT);
-
-  */
 }
 
-typedef struct pos {
-  int x;
-  int y;
-  struct pos *siguiente;
-};
+typedef struct celda {
+  unsigned short px;
+  unsigned short py;
+  unsigned short dx;
+  unsigned short dy;
+  struct celda* next;
+}*celda;
 
+typedef struct lista{
+  celda head;
+  unsigned int size;
+}*plista;
+
+
+// Variables para el pong
 
 int ballX = 42;
 int ballY = 20;
@@ -216,7 +129,17 @@ int paleta1, paleta2;
 int scoreDivisor = 7;
 int paletaAlto = 3;
 
+// Variables para el snake
 
+plista snake = crearSnake();
+
+plista crearSnake(){
+  plista snake= (plista) malloc(sizeof (struct lista));
+  for(int i=0;i<START_SNAKE_LENGHT;i++){
+
+  }
+
+}
 
 void loop() {
 
@@ -249,7 +172,7 @@ void menu(int k) {
   for (int i = 0; i < k; i++) {
     display.setTextSize(1);
     display.setCursor(10, 10);
-    int selector = analogRead(JUGADOR1);
+    int selector = analogRead(POTEN1);
     if (selector <= 512) {
       juego = 0;
       display.clearDisplay();
@@ -320,8 +243,8 @@ void drawRectangulo(int x, int y, int w, int h) {
 }
 
 void leerPotenciometros() {
-  int jug1 = analogRead(JUGADOR1);
-  int jug2 = analogRead(JUGADOR2);
+  int jug1 = analogRead(POTEN1);
+  int jug2 = analogRead(POTEN2);
   paleta1 = map(jug1, 0, 1023, 0, 40) + 7;
   paleta2 = map(jug2, 0, 1023, 0, 40) + 7;
   Serial.print("jug1: ");
@@ -458,116 +381,5 @@ void drawCursor(int x, int y) {
   display.drawPixel(x - 1, y + 1, BLACK);
   display.drawPixel(x  , y + 1, BLACK);
   display.drawPixel(x + 1, y + 1, BLACK);
-
-
-
-
-}
-void testdrawchar(void) {
-  display.setTextSize(1);
-  display.setTextColor(BLACK);
-  display.setCursor(0, 0);
-
-  for (uint8_t i = 0; i < 168; i++) {
-    if (i == '\n') continue;
-    display.write(i);
-    //if ((i > 0) && (i % 14 == 0))
-    //display.println();
   }
-  display.display();
-}
-
-void testfillrect(void) {
-  uint8_t color = 1;
-  for (int16_t i = 0; i < display.height() / 2; i += 3) {
-    // alternate colors
-    display.fillRect(i, i, display.width() - i * 2, display.height() - i * 2, color % 2);
-    display.display();
-    color++;
-  }
-}
-
-void testdrawtriangle(void) {
-  for (int16_t i = 0; i < min(display.width(), display.height()) / 2; i += 5) {
-    display.drawTriangle(display.width() / 2, display.height() / 2 - i,
-                         display.width() / 2 - i, display.height() / 2 + i,
-                         display.width() / 2 + i, display.height() / 2 + i, BLACK);
-    display.display();
-  }
-}
-void testfilltriangle(void) {
-  uint8_t color = BLACK;
-  for (int16_t i = min(display.width(), display.height()) / 2; i > 0; i -= 5) {
-    display.fillTriangle(display.width() / 2, display.height() / 2 - i,
-                         display.width() / 2 - i, display.height() / 2 + i,
-                         display.width() / 2 + i, display.height() / 2 + i, color);
-    if (color == WHITE) color = BLACK;
-    else color = WHITE;
-    display.display();
-  }
-}
-void testdrawroundrect(void) {
-  for (int16_t i = 0; i < display.height() / 2 - 2; i += 2) {
-    display.drawRoundRect(i, i, display.width() - 2 * i, display.height() - 2 * i, display.height() / 4, BLACK);
-    display.display();
-  }
-}
-void testfillroundrect(void) {
-  uint8_t color = BLACK;
-  for (int16_t i = 0; i < display.height() / 2 - 2; i += 2) {
-    display.fillRoundRect(i, i, display.width() - 2 * i, display.height() - 2 * i, display.height() / 4, color);
-    if (color == WHITE) color = BLACK;
-    else color = WHITE;
-    display.display();
-  }
-}
-void testdrawrect(void) {
-  for (int16_t i = 0; i < display.height() / 2; i += 2) {
-    display.drawRect(i, i, display.width() - 2 * i, display.height() - 2 * i, BLACK);
-    display.display();
-  }
-}
-void testdrawline() {
-  for (int16_t i = 0; i < display.width(); i += 4) {
-    display.drawLine(0, 0, i, display.height() - 1, BLACK);
-    display.display();
-  }
-  for (int16_t i = 0; i < display.height(); i += 4) {
-    display.drawLine(0, 0, display.width() - 1, i, BLACK);
-    display.display();
-  }
-  delay(250);
-
-  display.clearDisplay();
-  for (int16_t i = 0; i < display.width(); i += 4) {
-    display.drawLine(0, display.height() - 1, i, 0, BLACK);
-    display.display();
-  }
-  for (int8_t i = display.height() - 1; i >= 0; i -= 4) {
-    display.drawLine(0, display.height() - 1, display.width() - 1, i, BLACK);
-    display.display();
-  }
-  delay(250);
-
-  display.clearDisplay();
-  for (int16_t i = display.width() - 1; i >= 0; i -= 4) {
-    display.drawLine(display.width() - 1, display.height() - 1, i, 0, BLACK);
-    display.display();
-  }
-  for (int16_t i = display.height() - 1; i >= 0; i -= 4) {
-    display.drawLine(display.width() - 1, display.height() - 1, 0, i, BLACK);
-    display.display();
-  }
-  delay(250);
-
-  display.clearDisplay();
-  for (int16_t i = 0; i < display.height(); i += 4) {
-    display.drawLine(display.width() - 1, 0, 0, i, BLACK);
-    display.display();
-  }
-  for (int16_t i = 0; i < display.width(); i += 4) {
-    display.drawLine(display.width() - 1, 0, i, display.height() - 1, BLACK);
-    display.display();
-  }
-  delay(250);
 }
