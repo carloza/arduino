@@ -28,10 +28,15 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(32, 31, 30);
 #define MAX_PONG_LIFES 12
 #define PONG_LIFES 5
 #define MAX_SNAKE_LENGHT 30
-#define START_SNAKE_LENGHT 3
+#define START_SNAKE_LENGHT 6
 
-#define POTEN1 A14 //potenciometro 1
+#define POTEN1 A7 //potenciometro 1
 #define POTEN2 A15 //potenciometro 2
+
+#define NORTE [0,1]
+#define SUR [0,-1]
+#define ESTE [1,0]
+#define OESTE [-1,0]
 
 static const unsigned char img [] PROGMEM = {
   // 'screen-img, 84x48px
@@ -81,10 +86,13 @@ void mostrarLogos(){
 }
 
 
+struct lista * snake;
 
 void setup()   {
   Serial.begin(9600);
 
+  snake = crearSnake();
+  
   pinMode(POTEN1, INPUT);
   pinMode(POTEN2, INPUT);
   display.begin();
@@ -96,21 +104,24 @@ void setup()   {
   display.clearDisplay();   // clears the screen and buffer
 
 
-  menu(100);
+  menu(50);
 }
 
-typedef struct celda {
+
+
+struct celda {
+  unsigned short id;
   unsigned short px;
   unsigned short py;
   unsigned short dx;
   unsigned short dy;
   struct celda* next;
-}*celda;
+};
 
-typedef struct lista{
-  celda head;
-  unsigned int size;
-}*plista;
+struct lista{
+  celda * head;
+  unsigned short largo;
+};
 
 
 // Variables para el pong
@@ -131,15 +142,64 @@ int paletaAlto = 3;
 
 // Variables para el snake
 
-plista snake = crearSnake();
+struct celda * crearCelda(int id, int px, int py, int dx, int dy){
+  struct celda * cel= (struct celda *) malloc(sizeof (struct celda));
+  cel->id=id;
+  cel->px=px;
+  cel->py=py;
+  cel->dx=dx;
+  cel->dy=dy;
+  cel->next=0;
 
-plista crearSnake(){
-  plista snake= (plista) malloc(sizeof (struct lista));
-  for(int i=0;i<START_SNAKE_LENGHT;i++){
-
-  }
-
+  Serial.println("CREAR CELDA:");
+  Serial.print("ID= ");
+  Serial.print(cel->id);
+  Serial.print(" PX= ");
+  Serial.print(cel->px);
+  Serial.print(" PY= ");
+  Serial.println(cel->py);
+  
+  return cel;
 }
+
+struct lista * crearSnake(){
+  struct lista* snake= (struct lista *) malloc(sizeof(struct lista));
+  struct celda* cabeza=crearCelda(1,40,20,1,0);
+  snake->head=cabeza;
+  snake->largo=START_SNAKE_LENGHT;
+  for(int i=1;i<(snake->largo);i++){
+    struct celda* cel=crearCelda((i+1),(40-(i*4)),20,1,0);
+    cabeza->next=cel;
+    cabeza=cel;
+  }
+  return snake;  
+}
+
+void drawSnake(struct lista* snake){
+  struct celda* cel;
+  cel=snake->head;
+  for(int i=1; i<=(snake->largo);i++){    
+    drawCelda(cel);
+    cel=cel->next;
+  }
+}
+
+void drawCelda(struct celda * cel){
+  int x=cel->px;
+  int y=cel->py;
+  //dibujo celda de 3x3
+  display.drawPixel(x - 1, y - 1, BLACK);
+  display.drawPixel(x  , y - 1, BLACK);
+  display.drawPixel(x + 1, y - 1, BLACK);
+  display.drawPixel(x - 1, y, BLACK);
+  display.drawPixel(x  , y, BLACK);
+  display.drawPixel(x + 1, y, BLACK);
+  display.drawPixel(x - 1, y + 1, BLACK);
+  display.drawPixel(x  , y + 1, BLACK);
+  display.drawPixel(x + 1, y + 1, BLACK);
+}
+
+
 
 void loop() {
 
@@ -158,12 +218,55 @@ void loop() {
         break;
       }
     case 1: {
-
+        //SNAKE
+        //imprimirSnake(snake);
+        drawSnake(snake);
+        actualizarSnake(snake);
+        display.display();
+        delay(100);
+        display.clearDisplay();
       }
   }
 
 }
 
+void imprimirSnake(struct lista * snake){
+  struct celda* cel;
+  cel=snake->head;
+  for(int i=1; i<(snake->largo);i++){    
+    Serial.print("PX= ");
+    Serial.print(cel->px);
+    Serial.print(" PY= ");
+    Serial.println(cel->py);
+    cel=cel->next;
+  }
+}
+
+
+void actualizarSnake(struct lista * snake){
+  int deltax1, deltay1, posx1, posy1;
+  struct celda * cel= (snake->head); 
+   
+  for (int i=1;i<=(snake->largo);i++){
+    deltax1=cel->dx;
+    deltay1=cel->dy;
+
+    posx1=cel->px;
+    posy1=cel->py;  
+  
+    (cel->px)=(posx1+deltax1)%84;
+    (cel->py)=(posy1+deltay1)%48;
+
+    Serial.print("ID= ");
+    Serial.print(cel->id);
+    Serial.print(" PX= ");
+    Serial.print(cel->px);
+    Serial.print(" PY= ");
+    Serial.println(cel->py);
+
+    cel=cel->next;
+  }
+}
 
 void menu(int k) {
 
@@ -354,10 +457,11 @@ void drawPaletas(int pos1, int pos2) {
   display.drawPixel(80, pos2 + 3, BLACK);
 }
 
+
+
 void drawCursor(int x, int y) {
 
   //dibujo estela
-  
   int estelaX = x - (ballDX * 1);
   int estelaY = y - (ballDY * 1);
   display.drawPixel(estelaX - 1, estelaY - 1, BLACK);
@@ -381,5 +485,5 @@ void drawCursor(int x, int y) {
   display.drawPixel(x - 1, y + 1, BLACK);
   display.drawPixel(x  , y + 1, BLACK);
   display.drawPixel(x + 1, y + 1, BLACK);
-  }
-}
+ }
+
