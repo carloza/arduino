@@ -28,15 +28,22 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(32, 31, 30);
 #define MAX_PONG_LIFES 12
 #define PONG_LIFES 5
 #define MAX_SNAKE_LENGHT 30
-#define START_SNAKE_LENGHT 6
+#define START_SNAKE_LENGHT 3
+#define ANCHO_SNAKE 3
 
-#define POTEN1 A7 //potenciometro 1
+#define ANCHO_PANTALLA 84
+#define ALTO_PANTALLA 48
+
+#define POTEN1 A8 //potenciometro 1
 #define POTEN2 A15 //potenciometro 2
+#define BOTON1 7 // boton izquierdo
+#define BOTON2 6 // boton derecho
 
-#define NORTE [0,1]
-#define SUR [0,-1]
-#define ESTE [1,0]
-#define OESTE [-1,0]
+
+#define NORTE {0,1}
+#define SUR {0,-1}
+#define ESTE {1,0}
+#define OESTE {-1,0}
 
 static const unsigned char img [] PROGMEM = {
   // 'screen-img, 84x48px
@@ -91,10 +98,15 @@ struct lista * snake;
 void setup()   {
   Serial.begin(9600);
 
-  snake = crearSnake();
+  int dir[] = {1,0};
+  snake = crearSnake(40,20,dir);
   
   pinMode(POTEN1, INPUT);
   pinMode(POTEN2, INPUT);
+
+  pinMode(BOTON1, INPUT_PULLUP);
+  pinMode(BOTON2, INPUT_PULLUP);
+  
   display.begin();
   // init done
 
@@ -113,13 +125,17 @@ struct celda {
   unsigned short id;
   unsigned short px;
   unsigned short py;
-  unsigned short dx;
-  unsigned short dy;
+  //unsigned short dx;
+  //unsigned short dy;
   struct celda* next;
+  struct celda* prev;
 };
 
 struct lista{
-  celda * head;
+  celda * cabeza;
+  celda * cola;
+  unsigned short dx;
+  unsigned short dy;
   unsigned short largo;
 };
 
@@ -142,14 +158,13 @@ int paletaAlto = 3;
 
 // Variables para el snake
 
-struct celda * crearCelda(int id, int px, int py, int dx, int dy){
+struct celda * crearCelda(int id, int px, int py){
   struct celda * cel= (struct celda *) malloc(sizeof (struct celda));
   cel->id=id;
   cel->px=px;
   cel->py=py;
-  cel->dx=dx;
-  cel->dy=dy;
   cel->next=0;
+  cel->prev=0;
 
   Serial.println("CREAR CELDA:");
   Serial.print("ID= ");
@@ -162,22 +177,29 @@ struct celda * crearCelda(int id, int px, int py, int dx, int dy){
   return cel;
 }
 
-struct lista * crearSnake(){
+struct lista * crearSnake(int px, int py, int* dir){
   struct lista* snake= (struct lista *) malloc(sizeof(struct lista));
-  struct celda* cabeza=crearCelda(1,40,20,1,0);
-  snake->head=cabeza;
+  struct celda* cel1=crearCelda(1,px,py);
+  snake->cabeza=cel1;
+  snake->dx=dir[0];
+  snake->dy=dir[1];
   snake->largo=START_SNAKE_LENGHT;
+  struct celda* cel2;
+  int ancho= ANCHO_SNAKE + 1;
   for(int i=1;i<(snake->largo);i++){
-    struct celda* cel=crearCelda((i+1),(40-(i*4)),20,1,0);
-    cabeza->next=cel;
-    cabeza=cel;
+    
+    cel2 =crearCelda((i+1),(px-(i*ancho)),py);
+    cel1->next=cel2;
+    cel2->prev=cel1;
+    cel1=cel2;
   }
+  snake->cola=cel2;
   return snake;  
 }
 
 void drawSnake(struct lista* snake){
   struct celda* cel;
-  cel=snake->head;
+  cel=snake->cabeza;
   for(int i=1; i<=(snake->largo);i++){    
     drawCelda(cel);
     cel=cel->next;
@@ -223,7 +245,7 @@ void loop() {
         drawSnake(snake);
         actualizarSnake(snake);
         display.display();
-        delay(100);
+        delay(120);
         display.clearDisplay();
       }
   }
@@ -232,7 +254,7 @@ void loop() {
 
 void imprimirSnake(struct lista * snake){
   struct celda* cel;
-  cel=snake->head;
+  cel=snake->cabeza;
   for(int i=1; i<(snake->largo);i++){    
     Serial.print("PX= ");
     Serial.print(cel->px);
@@ -244,28 +266,132 @@ void imprimirSnake(struct lista * snake){
 
 
 void actualizarSnake(struct lista * snake){
-  int deltax1, deltay1, posx1, posy1;
-  struct celda * cel= (snake->head); 
-   
-  for (int i=1;i<=(snake->largo);i++){
-    deltax1=cel->dx;
-    deltay1=cel->dy;
+  int deltax1, deltay1, posx1, posy1, posx2, posy2;
+  //struct celda * cel= (snake->cabeza); 
+  struct celda * cel;
 
-    posx1=cel->px;
-    posy1=cel->py;  
+  int boton_izq=leerBotonIzq();
+  int boton_der=leerBotonDer();
+
+  if(!boton_izq){
+    //ANTIHORARIO
+    girarSnake(snake,-1);
+  }
+
+  if(!boton_der){
+    //HORARIO
+    girarSnake(snake,1);
+  }
+  //Serial.println("ACTUALIZAR SNAKE"); 
+
+
+
+
+
+
+  // Obtengo celda cabeza de snake
+  cel = snake->cabeza;
+  // Direccion de snake
+  deltax1=snake->dx;
+  deltay1=snake->dy;
+  // Guardo posicion 1
+  posx1=cel->px;
+  posy1=cel->py;
+  posx2=posx1+(deltax1*(ANCHO_SNAKE+1));
+  posy2=posy1+(deltay1*(ANCHO_SNAKE+1));
   
-    (cel->px)=(posx1+deltax1)%84;
-    (cel->py)=(posy1+deltay1)%48;
+  // Seteo posicion con: posicion + deltas de snake * ancho snake
+  if (posx2<0){
+    (cel->px)=ANCHO_PANTALLA;
+  }
+  else{
+    (cel->px)=posx2%ANCHO_PANTALLA;
+  }
 
+  if (posy2<0){
+    (cel->py)=ALTO_PANTALLA;
+  }
+  else{
+    (cel->py)=posy2%ALTO_PANTALLA;
+  }
+
+  /*
+  Serial.println("ANTES DE FOR");
+  Serial.print("ID= ");
+  Serial.print(cel->id);
+  Serial.print(" PX= ");
+  Serial.print(cel->px);
+  Serial.print(" PY= ");
+  Serial.println(cel->py); 
+  Serial.println("FOR:");
+  */
+  
+  
+  for (int i=1;i<(snake->largo);i++){
+
+    // Obtengo siguiente
+    cel=cel->next;
+
+    // Guardo posicion 2
+    posx2=cel->px;
+    posy2=cel->py;  
+
+    // Seteo posicion con posicion del anterior
+    (cel->px)=posx1; 
+    (cel->py)=posy1; 
+
+    posx1=posx2;
+    posy1=posy2;
+      
+	  /*
     Serial.print("ID= ");
     Serial.print(cel->id);
     Serial.print(" PX= ");
     Serial.print(cel->px);
     Serial.print(" PY= ");
     Serial.println(cel->py);
-
-    cel=cel->next;
+	  */
+    
   }
+}
+
+void girarSnake(struct lista* snake, int giro){ // giro 1 = horario, -1 = antihorario
+
+  int dx= snake->dx;
+  int dy= snake->dy;
+  /*
+  Serial.println("GIRAR SNAKE");
+  Serial.print("DX= ");
+  Serial.print(dx);
+  Serial.print(" DY= ");
+  Serial.println(dy);
+  */
+
+  if ((dx==0)&&(dy==1)){
+    // ESTE -> SUR
+    Serial.println("ESTE > SUR");
+    snake->dy=0;
+    snake->dx=-1*giro;  
+  }
+  if ((dx==0)&&(dy==-1)){
+    // OESTE -> NORTE
+    Serial.println("OESTE > NORTE");
+    snake->dy=0;
+    snake->dx=1*giro;
+  }
+  if ((dx==1)&&(dy==0)){
+    //NORTE -> ESTE
+    Serial.println("NORTE > ESTE");
+    snake->dy=1*giro;
+    snake->dx=0;
+  }
+  if ((dx==-1)&&(dy==0)){
+    //SUR -> OESTE
+    Serial.println("SUR > OESTE");
+    snake->dy=-1*giro;
+    snake->dx=0;
+  }
+  
 }
 
 void menu(int k) {
@@ -293,7 +419,7 @@ void menu(int k) {
       display.println("2.- SNAKE");
       display.display();
     }
-    delay(100);
+    delay(50);
   }
 }
 
@@ -354,6 +480,15 @@ void leerPotenciometros() {
   Serial.print(paleta1);
   Serial.print(" jug2: ");
   Serial.println(paleta2);
+}
+
+int leerBotonIzq(){
+  return digitalRead(BOTON1);
+}
+
+
+int leerBotonDer(){
+  return digitalRead(BOTON2);
 }
 
 void actualizarPelota() {
@@ -486,4 +621,3 @@ void drawCursor(int x, int y) {
   display.drawPixel(x  , y + 1, BLACK);
   display.drawPixel(x + 1, y + 1, BLACK);
  }
-
