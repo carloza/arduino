@@ -27,7 +27,7 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(32, 31, 30);
 
 #define MAX_PONG_LIFES 12
 #define PONG_LIFES 5
-#define MAX_SNAKE_LENGHT 30
+#define MAX_SNAKE_LENGHT 12
 #define START_SNAKE_LENGHT 3
 #define ANCHO_SNAKE 3
 
@@ -82,6 +82,8 @@ static const unsigned char img [] PROGMEM = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+boolean agregarCelda=false;
+
 int juego = 0;
 
 void mostrarLogos(){
@@ -93,16 +95,19 @@ void mostrarLogos(){
 }
 
 
-struct lista * snake;
+struct lista * snake; // snake
+
+struct pos * manzana; // manzana para comer
 
 void setup()   {
   Serial.begin(9600);
 
   int dir[] = {1,0};
   snake = crearSnake(40,20,dir);
+  manzana = crearManzana(60,32);
   
   pinMode(POTEN1, INPUT);
-  pinMode(POTEN2, INPUT);
+  pinMode(POTEN2, INPUT); 
 
   pinMode(BOTON1, INPUT_PULLUP);
   pinMode(BOTON2, INPUT_PULLUP);
@@ -119,17 +124,19 @@ void setup()   {
   menu(50);
 }
 
-
+struct pos{
+  unsigned short px;
+  unsigned short py;
+};
 
 struct celda {
   unsigned short id;
   unsigned short px;
   unsigned short py;
-  //unsigned short dx;
-  //unsigned short dy;
   struct celda* next;
   struct celda* prev;
 };
+
 
 struct lista{
   celda * cabeza;
@@ -156,6 +163,7 @@ int paleta1, paleta2;
 int scoreDivisor = 7;
 int paletaAlto = 3;
 
+
 // Variables para el snake
 
 struct celda * crearCelda(int id, int px, int py){
@@ -175,6 +183,13 @@ struct celda * crearCelda(int id, int px, int py){
   Serial.println(cel->py);
   
   return cel;
+}
+
+struct pos* crearManzana(int px, int py){
+  struct pos* mzn=(struct pos*) malloc(sizeof(struct pos));
+  mzn->px=px;
+  mzn->py=py;
+  return mzn;
 }
 
 struct lista * crearSnake(int px, int py, int* dir){
@@ -204,6 +219,12 @@ void drawSnake(struct lista* snake){
     drawCelda(cel);
     cel=cel->next;
   }
+}
+
+void drawFruta(struct pos * manzana){
+  int x=manzana->px;
+  int y=manzana->py;
+  display.fillCircle(x, y, 2, BLACK);
 }
 
 void drawCelda(struct celda * cel){
@@ -243,6 +264,7 @@ void loop() {
         //SNAKE
         //imprimirSnake(snake);
         drawSnake(snake);
+        drawFruta(manzana);
         actualizarSnake(snake);
         display.display();
         delay(120);
@@ -262,6 +284,17 @@ void imprimirSnake(struct lista * snake){
     Serial.println(cel->py);
     cel=cel->next;
   }
+}
+
+void agregarCeldaSnake(struct lista * snake){
+  struct celda* nueva;
+  struct celda* anterior=snake->cola;
+  int dx=snake->dx;
+  int dy=snake->dy;
+  nueva=crearCelda((anterior->id)+1,(anterior->px)-dx,(anterior->py)-dy);
+  nueva->prev=anterior;
+  anterior->next=nueva;
+  snake->cola=nueva;
 }
 
 
@@ -288,17 +321,35 @@ void actualizarSnake(struct lista * snake){
 
 
 
-
   // Obtengo celda cabeza de snake
   cel = snake->cabeza;
+  
   // Direccion de snake
   deltax1=snake->dx;
-  deltay1=snake->dy;
+  deltay1=snake->dy; 
+  
   // Guardo posicion 1
   posx1=cel->px;
   posy1=cel->py;
-  posx2=posx1+(deltax1*(ANCHO_SNAKE+1));
-  posy2=posy1+(deltay1*(ANCHO_SNAKE+1));
+
+  // Chequear colision con fruta antes de 
+  // actualizar la posicion de la cabeza
+  int mpx=manzana->px;
+  int mpy=manzana->py;
+  int radio=2;
+  
+  if ((posx1<=mpx+radio)&&(posx1>=mpx-radio)&&(posy1<=mpy+radio)&&(posy1>=mpy-radio)){
+    //Hay colision
+    Serial.println("ÑOMI ÑOMI ÑOMI RICOLINO");
+    int nuevopx=random(ANCHO_PANTALLA);
+    int nuevopy=random(ALTO_PANTALLA);
+    manzana=crearManzana(nuevopx,nuevopy);
+    agregarCelda=true;
+    //agregarCeldaSnake(snake);
+  }
+  
+  posx2=posx1+(deltax1*(ANCHO_SNAKE));
+  posy2=posy1+(deltay1*(ANCHO_SNAKE));
   
   // Seteo posicion con: posicion + deltas de snake * ancho snake
   if (posx2<0){
@@ -314,19 +365,6 @@ void actualizarSnake(struct lista * snake){
   else{
     (cel->py)=posy2%ALTO_PANTALLA;
   }
-
-  /*
-  Serial.println("ANTES DE FOR");
-  Serial.print("ID= ");
-  Serial.print(cel->id);
-  Serial.print(" PX= ");
-  Serial.print(cel->px);
-  Serial.print(" PY= ");
-  Serial.println(cel->py); 
-  Serial.println("FOR:");
-  */
-  
-  
   for (int i=1;i<(snake->largo);i++){
 
     // Obtengo siguiente
@@ -342,16 +380,16 @@ void actualizarSnake(struct lista * snake){
 
     posx1=posx2;
     posy1=posy2;
-      
-	  /*
-    Serial.print("ID= ");
-    Serial.print(cel->id);
-    Serial.print(" PX= ");
-    Serial.print(cel->px);
-    Serial.print(" PY= ");
-    Serial.println(cel->py);
-	  */
-    
+  }
+  if(agregarCelda){
+    struct celda* nueva;
+    nueva=crearCelda((cel->id)+1,posx1,posy1);
+    nueva->prev=cel;
+    cel->next=nueva;
+    snake->cola=nueva;
+    snake->largo++;
+    agregarCelda=false;
+    imprimirSnake(snake);
   }
 }
 
